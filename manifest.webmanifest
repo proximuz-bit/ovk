@@ -1,0 +1,14 @@
+{
+  "name": "OVK-protokoll",
+  "short_name": "OVK",
+  "description": "Obligatorisk ventilationskontroll – besiktningsprotokoll, luftflödesprotokoll och intyg.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1720",
+  "theme_color": "#0f766e",
+  "lang": "sv",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

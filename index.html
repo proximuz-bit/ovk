@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OVK-protokoll</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" />
+  <meta name="theme-color" content="#0f766e" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="icons/icon.svg" alt="" width="34" height="34" />
+        <div>
+          <strong>OVK-protokoll</strong>
+          <span id="brand-sub">Ventilation &amp; mätteknik</span>
+        </div>
+      </div>
+      <nav id="nav">
+        <a href="#/" data-route="/">Översikt</a>
+        <a href="#/nytt" data-route="/nytt">Nytt uppdrag</a>
+        <a href="#/fastigheter" data-route="/fastigheter">Fastigheter</a>
+        <a href="#/installningar" data-route="/installningar">Inställningar</a>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="btn-export" class="ghost" title="Ladda ner all data som JSON">Exportera data</button>
+        <button id="btn-import" class="ghost" title="Återläs från JSON-backup">Importera data</button>
+        <input type="file" id="file-import" accept="application/json" hidden />
+        <small id="storage-note"></small>
+      </div>
+    </aside>
+    <main id="main" class="main"></main>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
