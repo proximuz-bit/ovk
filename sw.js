@@ -1,10 +1,10 @@
 // Enkel offline-cache för appens statiska filer.
-const CACHE = "ovk-webb-v1";
+const CACHE = "ovk-webb-v2";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./manifest.webmanifest", "./icons/icon.svg",
-  "./vendor/pdf-lib.min.js",
+  "./vendor/pdf-lib.min.js", "./vendor/xlsx.full.min.js",
   "./src/app.js", "./src/db.js", "./src/domain.js", "./src/model.js", "./src/constants.js",
-  "./src/ui.js", "./src/pdf.js",
+  "./src/ui.js", "./src/pdf.js", "./src/excel.js",
   "./src/views/dashboard.js", "./src/views/uppdrag.js", "./src/views/fastigheter.js", "./src/views/installningar.js",
 ];
 

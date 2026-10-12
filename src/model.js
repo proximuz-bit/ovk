@@ -132,7 +132,10 @@ export function nyttFastighet(uppdrag) {
 
 /* ---------- härlett ---------- */
 // Intervall för ett system utifrån byggnadskategori + systemtyp.
+// Importerade system kan ha ett fast intervall (från Excel-protokollet).
 export function systemIntervall(uppdrag, system) {
+  const fast = system?.intervallArFast;
+  if (fast === 3 || fast === 6 || fast === 0) return fast;
   return intervallAr(uppdrag.byggnad.kategori, system.systemtyp);
 }
 // Nästa besiktningsdatum för ett system.

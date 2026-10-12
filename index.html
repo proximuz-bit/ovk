@@ -28,7 +28,9 @@
       <div class="sidebar-foot">
         <button id="btn-export" class="ghost" title="Ladda ner all data som JSON">Exportera data</button>
         <button id="btn-import" class="ghost" title="Återläs från JSON-backup">Importera data</button>
+        <button id="btn-import-excel" class="ghost" title="Importera ifyllda OVK-protokoll (Excel)">Importera OVK (Excel)</button>
         <input type="file" id="file-import" accept="application/json" hidden />
+        <input type="file" id="file-import-excel" accept=".xlsm,.xlsx,.xls" multiple hidden />
         <small id="storage-note"></small>
       </div>
     </aside>
@@ -37,6 +39,7 @@
   <div id="toast" class="toast" hidden></div>
 
   <script src="vendor/pdf-lib.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
   <script type="module" src="src/app.js"></script>
 </body>
 </html>

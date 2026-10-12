@@ -1,6 +1,7 @@
 import * as db from "./db.js";
 import { DEFAULT_SETTINGS } from "./model.js";
 import { $, $$, toast } from "./ui.js";
+import * as excel from "./excel.js";
 import * as dashboard from "./views/dashboard.js";
 import * as uppdragView from "./views/uppdrag.js";
 import * as fastigheter from "./views/fastigheter.js";
@@ -86,6 +87,30 @@ function wireChrome() {
       toast("Kunde inte läsa filen: " + err.message);
     }
     e.target.value = "";
+  });
+  $("#btn-import-excel").addEventListener("click", () => $("#file-import-excel").click());
+  $("#file-import-excel").addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    if (!window.XLSX) { toast("Excel-biblioteket är inte laddat."); e.target.value = ""; return; }
+    let antal = 0; const misslyckade = [];
+    for (const file of files) {
+      try {
+        const buf = await file.arrayBuffer();
+        const lista = excel.tolkaFil(window.XLSX, buf, { filnamn: file.name });
+        for (const u of lista) {
+          await db.put("uppdrag", u);
+          await fastigheter.syncFastighet(u);
+          antal++;
+        }
+      } catch (err) {
+        misslyckade.push(`${file.name}: ${err.message || err}`);
+      }
+    }
+    e.target.value = "";
+    if (misslyckade.length) console.warn("Excel-import misslyckades:", misslyckade);
+    toast(antal ? `Importerade ${antal} uppdrag${misslyckade.length ? ` (${misslyckade.length} misslyckades)` : ""}` : `Inget importerades. ${misslyckade[0] || ""}`);
+    navigate();
   });
 }
 
