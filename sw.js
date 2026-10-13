@@ -1,5 +1,5 @@
 // Enkel offline-cache för appens statiska filer.
-const CACHE = "ovk-webb-v3";
+const CACHE = "ovk-webb-v4";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./manifest.webmanifest", "./icons/icon.svg",
   "./vendor/pdf-lib.min.js", "./vendor/xlsx.full.min.js",
@@ -14,13 +14,18 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
+// Nät-först för appens egna filer: nya versioner slår alltid igenom när man är
+// online, och cachen används som reserv offline. (Cache-först gjorde att gamla
+// kodversioner låg kvar efter uppdatering.)
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;
   e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
+    fetch(e.request).then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
       return res;
-    }).catch(() => caches.match("./index.html")))
+    }).catch(() => caches.match(e.request).then((hit) => hit || caches.match("./index.html")))
   );
 });
