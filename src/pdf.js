@@ -1,6 +1,6 @@
 // Modern PDF-export med pdf-lib (window.PDFLib).
 import {
-  systemIntervall, systemNastaDatum, uppdragSummary, systemFlode, aggregatSfpv, behorighetRacker,
+  systemIntervall, systemNastaDatum, uppdragSummary, systemFlode, aggregatSfpv, behorighetRacker, matpunktKvot,
 } from "./model.js";
 import { POSITIONER, ENERGIÅTGÄRDER } from "./constants.js";
 import { fmt } from "./domain.js";
@@ -21,6 +21,9 @@ class Doc {
     this.page = null;
     this.y = 0;
     this.pageNo = 0;
+    this.pw = A4[0];
+    this.ph = A4[1];
+    this.landscape = false;
     this.navn = (settings?.foretag?.namn) || "OVK-protokoll";
   }
   async init() {
@@ -30,9 +33,13 @@ class Doc {
     this.bold = await this.pdf.embedFont(StandardFonts.HelveticaBold);
     this.addPage();
   }
-  addPage() {
-    this.page = this.pdf.addPage(A4);
-    this.y = A4[1] - M;
+  addPage(landscape = this.landscape) {
+    this.landscape = landscape;
+    const size = landscape ? [A4[1], A4[0]] : A4;
+    this.page = this.pdf.addPage(size);
+    this.pw = size[0];
+    this.ph = size[1];
+    this.y = this.ph - M;
     this.pageNo++;
     this.header();
     this.footer();
@@ -41,25 +48,25 @@ class Doc {
   header() {
     const { page, font } = this;
     const brand = [C.brand[0], C.brand[1], C.brand[2]];
-    page.drawRectangle({ x: 0, y: A4[1] - 58, width: A4[0], height: 58, color: rgb(brand) });
-    page.drawText(this.navn, { x: M, y: A4[1] - 34, size: 13, font: this.bold, color: rgb(C.white) });
+    page.drawRectangle({ x: 0, y: this.ph - 58, width: this.pw, height: 58, color: rgb(brand) });
+    page.drawText(this.navn, { x: M, y: this.ph - 34, size: 13, font: this.bold, color: rgb(C.white) });
     const t = "OVK-protokoll";
     const w = this.bold.widthOfTextAtSize(t, 13);
-    page.drawText(t, { x: A4[0] - M - w, y: A4[1] - 34, size: 13, font: this.bold, color: rgb(C.white) });
-    this.y = A4[1] - 58 - 18;
+    page.drawText(t, { x: this.pw - M - w, y: this.ph - 34, size: 13, font: this.bold, color: rgb(C.white) });
+    this.y = this.ph - 58 - 18;
   }
   footer() {
     const { page, font } = this;
     const y = M - 16;
-    page.drawLine({ start: { x: M, y: y + 12 }, end: { x: A4[0] - M, y: y + 12 }, thickness: 0.5, color: rgb(C.line) });
+    page.drawLine({ start: { x: M, y: y + 12 }, end: { x: this.pw - M, y: y + 12 }, thickness: 0.5, color: rgb(C.line) });
     page.drawText(this.settings?.foretag?.namn || "", { x: M, y, size: 8, font, color: rgb(C.muted) });
     const p = `Sida ${this.pageNo}`;
     const w = font.widthOfTextAtSize(p, 8);
-    page.drawText(p, { x: A4[0] - M - w, y, size: 8, font, color: rgb(C.muted) });
+    page.drawText(p, { x: this.pw - M - w, y, size: 8, font, color: rgb(C.muted) });
   }
   text(str, { size = 10, font = null, color = C.ink, x = M, dy = 4 } = {}) {
     const f = font || this.font;
-    const lines = wrap(String(str ?? ""), f, size, A4[0] - M - x);
+    const lines = wrap(String(str ?? ""), f, size, this.pw - M - x);
     for (const ln of lines) {
       this.ensure(size + 2);
       this.page.drawText(ln, { x, y: this.y - size, size, font: f, color: color ? rgb(color) : undefined });
@@ -71,11 +78,11 @@ class Doc {
     this.ensure(size + 18);
     this.y -= 8;
     this.text(str, { size, font: this.bold, color: C.brand, dy: 2 });
-    this.page.drawLine({ start: { x: M, y: this.y + 2 }, end: { x: A4[0] - M, y: this.y + 2 }, thickness: 1, color: rgb(C.brand) });
+    this.page.drawLine({ start: { x: M, y: this.y + 2 }, end: { x: this.pw - M, y: this.y + 2 }, thickness: 1, color: rgb(C.brand) });
     this.y -= 6;
   }
   keyvals(pairs, cols = 2) {
-    const colW = (A4[0] - M * 2) / cols;
+    const colW = (this.pw - M * 2) / cols;
     let i = 0;
     for (let r = 0; r < Math.ceil(pairs.length / cols); r++) {
       this.ensure(16);
@@ -92,7 +99,7 @@ class Doc {
   }
   box(title, lines) {
     this.ensure(20 + lines.length * 13);
-    this.page.drawRectangle({ x: M, y: this.y - 14 - lines.length * 13, width: A4[0] - M * 2, height: 20 + lines.length * 13, color: rgb(C.panel), borderColor: rgb(C.line), borderWidth: 0.7 });
+    this.page.drawRectangle({ x: M, y: this.y - 14 - lines.length * 13, width: this.pw - M * 2, height: 20 + lines.length * 13, color: rgb(C.panel), borderColor: rgb(C.line), borderWidth: 0.7 });
     this.page.drawText(title, { x: M + 10, y: this.y - 12, size: 10, font: this.bold, color: rgb(C.brand) });
     let yy = this.y - 28;
     for (const ln of lines) { this.page.drawText(ln, { x: M + 10, y: yy, size: 9, font: this.font, color: rgb(C.ink) }); yy -= 13; }
@@ -100,11 +107,11 @@ class Doc {
   }
   table(headers, rows, widths, { alignRight = [] } = {}) {
     const total = widths.reduce((a, b) => a + b, 0);
-    const scale = (A4[0] - M * 2) / total;
+    const scale = (this.pw - M * 2) / total;
     const ws = widths.map((w) => w * scale);
     const drawHead = () => {
       this.ensure(18);
-      this.page.drawRectangle({ x: M, y: this.y - 14, width: A4[0] - M * 2, height: 16, color: rgb(C.panel) });
+      this.page.drawRectangle({ x: M, y: this.y - 14, width: this.pw - M * 2, height: 16, color: rgb(C.panel) });
       let x = M + 4;
       headers.forEach((h, i) => {
         this.page.drawText(cut(h, this.bold, 8, ws[i] - 6), { x, y: this.y - 10, size: 8, font: this.bold, color: rgb(C.muted) });
@@ -127,7 +134,7 @@ class Doc {
         x += ws[i];
       });
       this.y -= h;
-      this.page.drawLine({ start: { x: M, y: this.y + 2 }, end: { x: A4[0] - M, y: this.y + 2 }, thickness: 0.4, color: rgb(C.line) });
+      this.page.drawLine({ start: { x: M, y: this.y + 2 }, end: { x: this.pw - M, y: this.y + 2 }, thickness: 0.4, color: rgb(C.line) });
     }
     this.y -= 6;
   }
@@ -211,7 +218,9 @@ export async function genereraPDF(u, { settings } = {}) {
   );
 
   for (const s of (u.system || [])) {
-    d.addPage();
+    d.addPage(false);
+    const sysIdx = (u.system || []).indexOf(s) + 1;
+    const sysTot = (u.system || []).length || 1;
     d.heading(`System ${s.systemnr || "?"}  (${s.systemtyp || "—"})`);
     d.keyvals([
       ["Resultat", s.resultat || "—"],
@@ -234,15 +243,6 @@ export async function genereraPDF(u, { settings } = {}) {
       d.table(["Systemdel", "Fläkttyp", "Inst.år", "Proj. l/s", "Uppm. l/s", "Betjänar"],
         s.fläktar.map((f) => [f.systemdel, f.fläkttyp, f.instAr, f.projFlode, f.uppmFlode, f.betjanar]),
         [3, 2, 1.5, 2, 2, 4], { alignRight: [3, 4] });
-    }
-
-    if ((s.matpunkter || []).length) {
-      d.heading("Luftflödesprotokoll", 11);
-      const sumf = systemFlode(u, s);
-      d.table(["Rum", "Don TL", "Proj TL", "Uppm TL", "Don FL", "Proj FL", "Uppm FL", "Ant."],
-        s.matpunkter.map((m) => [m.rumNr, m.tl.dontyp, m.tl.proj, m.tl.uppm, m.fl.dontyp, m.fl.proj, m.fl.uppm, m.anteckning]),
-        [1.5, 2.5, 1.6, 1.6, 2.5, 1.6, 1.6, 3], { alignRight: [2, 3, 5, 6] });
-      d.text(`Summa tilluft: proj ${fmt(sumf.tlProj, 0)} / uppmätt ${fmt(sumf.tlUppm, 0)} l/s   ·   frånluft: proj ${fmt(sumf.flProj, 0)} / uppmätt ${fmt(sumf.flUppm, 0)} l/s`, { size: 9, color: C.muted });
     }
 
     for (const a of (s.aggregat || [])) {
@@ -277,6 +277,37 @@ export async function genereraPDF(u, { settings } = {}) {
       for (const e of s.energiforslag) d.text("• " + (e.text || ENERGIÅTGÄRDER[e.nr] || ""), { size: 9 });
     }
     if (s.notering) d.text("Notering: " + s.notering, { size: 9 });
+    if ((s.matpunkter || []).length) {
+      d.addPage(true);
+      d.heading("Luftflödesprotokoll (L1)", 12);
+      const l1 = s.l1 || {};
+      d.keyvals([
+        ["Anläggning", l1.anlaggning], ["Ordernummer", l1.ordernr],
+        ["Aggregatförteckning", l1.aggregatforteckning], ["Ritningsnummer", l1.ritningsnummer],
+        ["Plan", l1.plan], ["Flödesenhet", "l/s"],
+        ["Mättekniker", u.besiktningsman.namn], ["Datum", s.besiktningsdatum || u.besiktningsdatum],
+        ["Sidnr.", `${sysIdx} (${sysTot})`],
+      ], 4);
+      const kvText = (x) => { const k = matpunktKvot(x); return k === null ? "" : k.toFixed(2); };
+      const rows = s.matpunkter.map((m) => [
+        m.rumNr, m.beskrivning,
+        m.tl.dontyp, m.tl.proj, m.tl.uppm, kvText(m.tl), m.tl.pa, m.tl.kFaktor, m.tl.matMetod,
+        m.fl.dontyp, m.fl.proj, m.fl.uppm, kvText(m.fl), m.fl.pa, m.fl.kFaktor, m.fl.kageldjup, m.fl.matMetod,
+        m.anteckning,
+      ]);
+      d.table(
+        ["Rumsnr", "Beskriv", "Don TL", "Proj TL", "Uppm TL", "Kvot TL", "Pa TL", "Kf TL", "Metod TL", "Don FL", "Proj FL", "Uppm FL", "Kvot FL", "Pa FL", "Kf FL", "Kägel", "Metod FL", "Ant."],
+        rows,
+        [1.2, 1.4, 1.4, 1.1, 1.3, 1.1, 0.9, 1, 1.1, 1.4, 1.1, 1.3, 1.1, 0.9, 1, 1, 1.1, 1.5],
+        { alignRight: [3, 4, 5, 6, 10, 11, 12, 13, 15] }
+      );
+      const sumf = systemFlode(u, s);
+      d.text(
+        `TOTALT FLÖDE — Tilluft: bq ${fmt(sumf.tlProj, 0)} / eq ${fmt(sumf.tlUppm, 0)} l/s (kvot ${sumf.tlProj ? (sumf.tlUppm / sumf.tlProj).toFixed(2) : "—"})   ·   Frånluft: bq ${fmt(sumf.flProj, 0)} / eq ${fmt(sumf.flUppm, 0)} l/s (kvot ${sumf.flProj ? (sumf.flUppm / sumf.flProj).toFixed(2) : "—"})`,
+        { size: 9, font: d.bold }
+      );
+      if ((s.l1 || {}).anteckning) d.text("Anteckningar: " + s.l1.anteckning, { size: 9, color: C.muted });
+    }
   }
 
   if (u.allmantOmdome || u.notering) {
@@ -285,12 +316,13 @@ export async function genereraPDF(u, { settings } = {}) {
     if (u.notering) d.text(u.notering, { size: 9, color: C.muted });
   }
 
+  if (d.landscape) d.addPage(false);
   d.ensure(70);
   d.y -= 10;
   d.page.drawLine({ start: { x: M, y: d.y }, end: { x: M + 220, y: d.y }, thickness: 0.7, color: rgb(C.muted) });
-  d.page.drawLine({ start: { x: A4[0] - M - 200, y: d.y }, end: { x: A4[0] - M, y: d.y }, thickness: 0.7, color: rgb(C.muted) });
+  d.page.drawLine({ start: { x: d.pw - M - 200, y: d.y }, end: { x: d.pw - M, y: d.y }, thickness: 0.7, color: rgb(C.muted) });
   d.page.drawText("Ort och datum", { x: M, y: d.y - 12, size: 8, font: d.font, color: rgb(C.muted) });
-  d.page.drawText("Underskrift besiktningsman", { x: A4[0] - M - 200, y: d.y - 12, size: 8, font: d.font, color: rgb(C.muted) });
+  d.page.drawText("Underskrift besiktningsman", { x: d.pw - M - 200, y: d.y - 12, size: 8, font: d.font, color: rgb(C.muted) });
 
   const name = `OVK_${(u.byggnad.fastighetsbeteckning || "protokoll").replace(/[^\wåäöÅÄÖ-]+/g, "_")}_${u.besiktningsdatum || ""}.pdf`;
   return d.save(name);

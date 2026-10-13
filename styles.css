@@ -80,6 +80,25 @@ tr.out-mid{background:#fffbeb}
 .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--radius-sm);max-height:60vh}
 .tbl-wrap input,.tbl-wrap select{padding:5px 7px;border-radius:6px;font-size:13px;min-width:70px}
 
+/* L1 – luftflödesprotokoll (replika av mallen) */
+.l1-head{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;background:#fff;margin-bottom:8px}
+.l1-f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.l1-f label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.l1-f input{min-width:0}
+.l1-ro{font-size:13.5px;padding:4px 2px;border-bottom:1px dashed var(--line);min-height:24px}
+table.l1{font-size:12.5px}
+table.l1 th,table.l1 td{padding:5px 6px}
+table.l1 th{position:static}
+table.l1 th.grp,table.l1 td.grp{text-align:center;background:var(--panel-2)}
+table.l1 input,table.l1 select{padding:4px 6px;font-size:12.5px;min-width:0;width:100%}
+table.l1 .num{text-align:right}
+table.l1 tr.l1-tot td{font-variant-numeric:tabular-nums;background:#f3f6f9;border-top:2px solid var(--line)}
+.l1-fot{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:16px;margin-top:14px;font-size:13px}
+.l1-fot ul{margin:4px 0;padding-left:16px}
+.l1-fot h4{margin:0 0 4px;font-size:12px;color:var(--muted);text-transform:uppercase}
+.l1-sign{border-bottom:1px solid var(--ink);min-height:28px;margin-bottom:4px}
+@media(max-width:820px){.l1-head,.l1-fot{grid-auto-flow:row;grid-template-columns:1fr}}
+
 /* Dashboard list */
 .ul-empty{padding:30px;text-align:center;color:var(--muted)}
 .item{display:grid;grid-template-columns:1fr auto;gap:8px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius-sm);background:#fff;margin-bottom:10px}

@@ -217,8 +217,8 @@ function matpunkterL1(ws) {
     if (!rum && !bes && !tlP && !tlU && !flP && !flU) continue;
     const m = nyMatpunkt();
     m.rumNr = rum; m.beskrivning = bes;
-    m.tl = { dontyp: "", proj: tlP, uppm: tlU, kFaktor: "", matMetod: normMatMetod(cellAt(ws, "O" + r)) };
-    m.fl = { dontyp: "", proj: flP, uppm: flU, kFaktor: "", matMetod: normMatMetod(cellAt(ws, "V" + r)) };
+    m.tl = { dontyp: "", proj: tlP, uppm: tlU, pa: "", kFaktor: "", matMetod: normMatMetod(cellAt(ws, "O" + r)) };
+    m.fl = { dontyp: "", proj: flP, uppm: flU, pa: "", kFaktor: "", kageldjup: "", matMetod: normMatMetod(cellAt(ws, "V" + r)) };
     ut.push(m);
   }
   return ut;
@@ -239,8 +239,8 @@ function matpunkterLFP(ws) {
     if (!rum && !bes && !tlD && !tlP && !tlU && !flD && !flP && !flU) continue;
     const m = nyMatpunkt();
     m.rumNr = rum; m.beskrivning = bes;
-    m.tl = { dontyp: tlD, proj: tlP, uppm: tlU, kFaktor: txt(cellAt(ws, "K" + r)), matMetod: normMatMetod(cellAt(ws, "L" + r)) };
-    m.fl = { dontyp: flD, proj: flP, uppm: flU, kFaktor: txt(cellAt(ws, "R" + r)), matMetod: normMatMetod(cellAt(ws, "T" + r)) };
+    m.tl = { dontyp: tlD, proj: tlP, uppm: tlU, pa: txt(cellAt(ws, "J" + r)), kFaktor: txt(cellAt(ws, "K" + r)), matMetod: normMatMetod(cellAt(ws, "L" + r)) };
+    m.fl = { dontyp: flD, proj: flP, uppm: flU, pa: txt(cellAt(ws, "Q" + r)), kFaktor: txt(cellAt(ws, "R" + r)), kageldjup: txt(cellAt(ws, "S" + r)), matMetod: normMatMetod(cellAt(ws, "T" + r)) };
     m.anteckning = txt(cellAt(ws, "U" + r));
     ut.push(m);
   }
@@ -421,19 +421,23 @@ function lasDetaljdata(wb, system) {
   const lfp = hittaArkMönster(wb, /luftflödesprotokoll/i);
   const e1 = hittaArkMönster(wb, /^e1$/i);
 
-  // Luftflöden: föredra detaljerade "Luftflödesprotokoll", annars L1-tabellen.
-  const mat = (lfp && matpunkterLFP(lfp)) || [];
-  const matMalkalla = mat.length ? "lfp" : (l1 && matpunkterL1(l1).length ? "l1" : "");
-  const matPunkter = matMalkalla === "lfp" ? mat : matMalkalla === "l1" ? matpunkterL1(l1) : [];
-  const matWs = matMalkalla === "lfp" ? lfp : matMalkalla === "l1" ? l1 : null;
+  // Fliknamnen är opålitliga (ny mall kan ha de två layouterna omvända) – välj
+  // layout utifrån vilken rubrik fliken faktiskt innehåller. Detaljerat
+  // (K-Faktor) format prioriteras framför äldre (Rum. nr.).
+  const kandidater = [lfp, l1].filter(Boolean);
+  const detaljWs = kandidater.find((ws) => rubrikRad(rubrikKarta(ws), "K-Faktor") !== null) || null;
+  const gammalWs = kandidater.find((ws) => rubrikRad(rubrikKarta(ws), "Rum. nr.") !== null) || null;
+  let matPunkter = [], matWs = null;
+  if (detaljWs) { matPunkter = matpunkterLFP(detaljWs); if (matPunkter.length) matWs = detaljWs; }
+  if (!matPunkter.length && gammalWs) { matPunkter = matpunkterL1(gammalWs); if (matPunkter.length) matWs = gammalWs; }
 
-  const de = l1 ? lasDriftEffekt(l1) : { driftstider: "", eleffekter: "" };
+  const de = (l1 || lfp) ? lasDriftEffekt(l1 || lfp) : { driftstider: "", eleffekter: "" };
   const agg = e1 ? aggregatE1(e1).filter(aggregatHarData) : [];
   const harData = matPunkter.length || de.driftstider || de.eleffekter || agg.length;
 
   // Vissa filer (t.ex. rena luftflödesprotokoll) saknar B-flikar men har mätdata.
   if (!system.length && harData) {
-    const kalla = matWs || l1 || e1;
+    const kalla = matWs || l1 || lfp || e1;
     system.push(nyttSystem(txt(cellAt(kalla, "G6")) || l1Nyckel(kalla)));
   }
   if (!system.length) return;
@@ -443,7 +447,7 @@ function lasDetaljdata(wb, system) {
     if (s) s.matpunkter = matPunkter;
   }
   if (de.driftstider || de.eleffekter) {
-    const s = valjSystem(system, l1Nyckel(l1));
+    const s = valjSystem(system, l1Nyckel(l1 || lfp));
     if (s) {
       if (de.driftstider) s.driftstider = de.driftstider;
       if (de.eleffekter) s.eleffekter = de.eleffekter;

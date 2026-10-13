@@ -1,6 +1,6 @@
 import * as db from "../db.js";
 import {
-  nyttUppdrag, nyttSystem, nyFläkt, nyMatpunkt, nyAggregat, nyKlimat, nyAnmarkning, nyAtgard,
+  nyttUppdrag, nyttSystem, nyFläkt, nyMatpunkt, matpunktKvot, nyAggregat, nyKlimat, nyAnmarkning, nyAtgard,
   uppdragSummary, systemIntervall, systemNastaDatum, systemFlode, aggregatSfpv, behorighetRacker,
 } from "../model.js";
 import {
@@ -373,50 +373,119 @@ function subFlaktar(s) {
   </table></div>`;
 }
 
-/* --- Luftflöde (L1) --- */
-function subLuftflode(u, s) {
-  const sum = systemFlode(u, s);
-  const tol = 1; // klassning per don
-  const rows = (s.matpunkter || []).map((m) => {
-    const tlP = num(m.tl.proj), tlU = num(m.tl.uppm), flP = num(m.fl.proj), flU = num(m.fl.uppm);
-    const tol0 = await_settings_tol();
-    const tlK = tlP ? avvikelseKlass(((tlU - tlP) / tlP) * 100, tol0.gron, tol0.gul) : "";
-    const flK = flP ? avvikelseKlass(((flU - flP) / flP) * 100, tol0.gron, tol0.gul) : "";
-    const pct = (p, uu, tag) => p && uu !== null ? `<div class="hint" data-pct="${tag}">${(((uu - p) / p) * 100).toFixed(0)} %</div>` : `<div class="hint" data-pct="${tag}"></div>`;
-    return `<tr class="${tlK === "high" || flK === "high" ? "out-high" : tlK === "mid" || flK === "mid" ? "out-mid" : ""}">
-      <td><input data-id="${m.id}" data-field="rumNr" value="${esc(m.rumNr)}" style="min-width:60px"></td>
-      <td><input data-id="${m.id}" data-field="beskrivning" value="${esc(m.beskrivning)}"></td>
-      <td><input data-id="${m.id}" data-field="tl.dontyp" value="${esc(m.tl.dontyp)}"></td>
-      <td class="num"><input data-id="${m.id}" data-field="tl.proj" value="${esc(m.tl.proj)}" style="text-align:right">${pct(tlP, tlU, "tl")}</td>
-      <td class="num"><input data-id="${m.id}" data-field="tl.uppm" value="${esc(m.tl.uppm)}" style="text-align:right"></td>
-      <td><input data-id="${m.id}" data-field="tl.kFaktor" value="${esc(m.tl.kFaktor)}"></td>
-      <td><select data-id="${m.id}" data-field="tl.matMetod">${option("", "—", m.tl.matMetod)}${options(MÄTMETODER, m.tl.matMetod)}</select></td>
-      <td><input data-id="${m.id}" data-field="fl.dontyp" value="${esc(m.fl.dontyp)}"></td>
-      <td class="num"><input data-id="${m.id}" data-field="fl.proj" value="${esc(m.fl.proj)}" style="text-align:right">${pct(flP, flU, "fl")}</td>
-      <td class="num"><input data-id="${m.id}" data-field="fl.uppm" value="${esc(m.fl.uppm)}" style="text-align:right"></td>
-      <td><input data-id="${m.id}" data-field="fl.kFaktor" value="${esc(m.fl.kFaktor)}"></td>
-      <td><select data-id="${m.id}" data-field="fl.matMetod">${option("", "—", m.fl.matMetod)}${options(MÄTMETODER, m.fl.matMetod)}</select></td>
-      <td><input data-id="${m.id}" data-field="anteckning" value="${esc(m.anteckning)}"></td>
-      <td><button class="btn danger small" data-rid="${m.id}" data-coll="matpunkter">×</button></td>
-    </tr>`;
-  }).join("");
-  return `
-  <div class="btn-row" style="margin-bottom:8px">
-    <button class="btn small" data-add-matpunkt>+ Mätpunkt</button>
-    <span class="sub" data-flode-sum>Summa TL: proj ${fmt(sum.tlProj, 0)} / uppm ${fmt(sum.tlUppm, 0)} l/s · FL: proj ${fmt(sum.flProj, 0)} / uppm ${fmt(sum.flUppm, 0)} l/s</span>
-  </div>
-  <div class="tbl-wrap"><table>
-    <thead>
-      <tr><th rowspan="2">Rum</th><th rowspan="2">Beskrivning</th><th colspan="5" style="text-align:center">Tilluft</th><th colspan="5" style="text-align:center">Frånluft</th><th rowspan="2">Ant.</th><th rowspan="2"></th></tr>
-      <tr><th>Don</th><th class="num">Proj</th><th class="num">Uppm</th><th>k-fakt</th><th>Metod</th><th>Don</th><th class="num">Proj</th><th class="num">Uppm</th><th>k-fakt</th><th>Metod</th></tr>
-    </thead>
-    <tbody>${rows || `<tr><td colspan="14" class="sub">Inga mätpunkter.</td></tr>`}</tbody>
-  </table></div>
-  <div class="hint" style="margin-top:8px">Färg: ≤ ±${(await_settings_tol().gron)} % grön, ≤ ±${(await_settings_tol().gul)} % gul, däröver röd. k-faktor används för don med k-faktor (l/s vid 1 Pa).</div>`;
-}
+/* --- Luftflöde (L1) – replika av mallens luftflödesprotokoll --- */
+const L1_MIN_RADER = 36;
 function await_settings_tol() {
-  const s = (window.__ovkSettings || {}).tolerans || { gron: 10, gul: 20 };
-  return s;
+  return (window.__ovkSettings || {}).tolerans || { gron: 10, gul: 20 };
+}
+function kvotText(sida) {
+  const k = matpunktKvot(sida);
+  return k === null ? "" : k.toFixed(2);
+}
+function l1Input(id, field, val, extra = "") {
+  return `<input data-id="${id}" data-field="${field}" value="${esc(val)}" ${extra}>`;
+}
+function luftflodeRad(m, tol) {
+  const tlK = avvikelseKlass((matpunktKvot(m.tl) !== null ? matpunktKvot(m.tl) - 1 : 0) * 100, tol.gron, tol.gul);
+  const flK = avvikelseKlass((matpunktKvot(m.fl) !== null ? matpunktKvot(m.fl) - 1 : 0) * 100, tol.gron, tol.gul);
+  const cls = (tlK === "high" || flK === "high") ? "out-high" : (tlK === "mid" || flK === "mid") ? "out-mid" : "";
+  return `<tr class="${cls}">
+    <td>${l1Input(m.id, "rumNr", m.rumNr, 'style="min-width:60px"')}</td>
+    <td>${l1Input(m.id, "beskrivning", m.beskrivning)}</td>
+    <td>${l1Input(m.id, "tl.dontyp", m.tl.dontyp, 'style="min-width:70px"')}</td>
+    <td class="num">${l1Input(m.id, "tl.proj", m.tl.proj, 'class="num" style="text-align:right"')}</td>
+    <td class="num">${l1Input(m.id, "tl.uppm", m.tl.uppm, 'class="num" style="text-align:right"')}</td>
+    <td class="num"><span data-kvot="tl">${kvotText(m.tl)}</span></td>
+    <td class="num">${l1Input(m.id, "tl.pa", m.tl.pa, 'class="num" style="text-align:right"')}</td>
+    <td>${l1Input(m.id, "tl.kFaktor", m.tl.kFaktor)}</td>
+    <td><select data-id="${m.id}" data-field="tl.matMetod"><option value=""${m.tl.matMetod ? "" : " selected"}>—</option>${options(MÄTMETODER, m.tl.matMetod)}</select></td>
+    <td>${l1Input(m.id, "fl.dontyp", m.fl.dontyp, 'style="min-width:70px"')}</td>
+    <td class="num">${l1Input(m.id, "fl.proj", m.fl.proj, 'class="num" style="text-align:right"')}</td>
+    <td class="num">${l1Input(m.id, "fl.uppm", m.fl.uppm, 'class="num" style="text-align:right"')}</td>
+    <td class="num"><span data-kvot="fl">${kvotText(m.fl)}</span></td>
+    <td class="num">${l1Input(m.id, "fl.pa", m.fl.pa, 'class="num" style="text-align:right"')}</td>
+    <td>${l1Input(m.id, "fl.kFaktor", m.fl.kFaktor)}</td>
+    <td class="num">${l1Input(m.id, "fl.kageldjup", m.fl.kageldjup, 'class="num" style="text-align:right"')}</td>
+    <td><select data-id="${m.id}" data-field="fl.matMetod"><option value=""${m.fl.matMetod ? "" : " selected"}>—</option>${options(MÄTMETODER, m.fl.matMetod)}</select></td>
+    <td>${l1Input(m.id, "anteckning", m.anteckning)}</td>
+    <td><button class="btn danger small" data-rid="${m.id}" data-coll="matpunkter">×</button></td>
+  </tr>`;
+}
+function subLuftflode(u, s) {
+  s.matpunkter = s.matpunkter || [];
+  s.l1 = s.l1 || { anlaggning: "", aggregatforteckning: "", ordernr: "", ritningsnummer: "", plan: "", anteckning: "" };
+  if (s.matpunkter.length < L1_MIN_RADER) {
+    while (s.matpunkter.length < L1_MIN_RADER) s.matpunkter.push(nyMatpunkt());
+    scheduleSave();
+  }
+  const setting = window.__ovkSettings || {};
+  const bm = u.besiktningsman || {};
+  const foretag = (setting.foretag && setting.foretag.namn) || "";
+  const tol = await_settings_tol();
+  const sysIdx = (u.system || []).indexOf(s) + 1;
+  const sysTot = (u.system || []).length || 1;
+  const rows = s.matpunkter.map((m) => luftflodeRad(m, tol)).join("");
+  const instr = (setting.matinstrument || []).map((i) => `<li>${esc(i.namn || "")}${i.nr ? " – " + esc(i.nr) : ""}</li>`).join("") || "<li>—</li>";
+  const metod = MÄTMETODER.filter((k) => MÄTMETOD_FÖRKLARING[k]).map((k) => `<li><strong>${esc(k)}</strong> ${esc(MÄTMETOD_FÖRKLARING[k])}</li>`).join("");
+  return `
+  <div class="l1-head">
+    <div class="l1-f"><label>Mättekniker</label><div class="l1-ro">${esc(bm.namn || "—")}</div></div>
+    <div class="l1-f"><label>Företag</label><div class="l1-ro">${esc(foretag || "—")}</div></div>
+    <div class="l1-f"><label>Plan</label><input name="s.l1.plan" value="${esc(s.l1.plan)}"></div>
+    <div class="l1-f"><label>Sidnr.</label><div class="l1-ro">${sysIdx} (${sysTot})</div></div>
+  </div>
+  <div class="l1-head">
+    <div class="l1-f"><label>Anläggning</label><input name="s.l1.anlaggning" value="${esc(s.l1.anlaggning)}"></div>
+    <div class="l1-f"><label>Ordernummer</label><input name="s.l1.ordernr" value="${esc(s.l1.ordernr)}"></div>
+    <div class="l1-f"><label>Ritningsnummer</label><input name="s.l1.ritningsnummer" value="${esc(s.l1.ritningsnummer)}"></div>
+    <div class="l1-f"><label>Aggregatförteckning</label><input name="s.l1.aggregatforteckning" value="${esc(s.l1.aggregatforteckning)}"></div>
+    <div class="l1-f"><label>Flödesenhet</label><div class="l1-ro">l/s</div></div>
+    <div class="l1-f"><label>Datum</label><div class="l1-ro">${esc(s.besiktningsdatum || u.besiktningsdatum || "—")}</div></div>
+  </div>
+  <div class="btn-row" style="margin:10px 0">
+    <button class="btn small" data-add-matpunkt>+ Mätpunkt</button>
+    <span class="sub">Flödesenhet: l/s · ${L1_MIN_RADER} rader visas alltid</span>
+  </div>
+  <div class="tbl-wrap"><table class="l1">
+    <thead>
+      <tr>
+        <th rowspan="2">Rumsnr</th><th rowspan="2">Beskrivning</th>
+        <th colspan="7" class="grp">Tilluft</th>
+        <th colspan="8" class="grp">Frånluft</th>
+        <th rowspan="2">Anteckning</th><th rowspan="2"></th>
+      </tr>
+      <tr>
+        <th>Don Typ</th><th class="num">Proj</th><th class="num">Uppm</th><th class="num">Kvot</th><th class="num">Pa</th><th>K-faktor</th><th>Mät-metod</th>
+        <th>Don Typ</th><th class="num">Proj</th><th class="num">Uppm</th><th class="num">Kvot</th><th class="num">Pa</th><th>K-faktor</th><th class="num">Kägel-djup</th><th>Mät-metod</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+    <tfoot>
+      <tr class="l1-tot">
+        <td colspan="2" style="text-align:right"><strong>TOTALT FLÖDE:</strong></td>
+        <td></td>
+        <td class="num" data-tot="tlProj"></td>
+        <td class="num" data-tot="tlUppm"></td>
+        <td class="num" data-tot="tlKvot"></td>
+        <td colspan="3"></td>
+        <td></td>
+        <td class="num" data-tot="flProj"></td>
+        <td class="num" data-tot="flUppm"></td>
+        <td class="num" data-tot="flKvot"></td>
+        <td colspan="4"></td>
+        <td colspan="2" class="sub" style="font-size:11px;text-align:right">l/s (bq / eq)</td>
+      </tr>
+    </tfoot>
+  </table></div>
+  <div class="l1-fot">
+    <div><h4>Anteckningar</h4><textarea name="s.l1.anteckning" rows="3">${esc(s.l1.anteckning || "")}</textarea></div>
+    <div><h4>Mätinstrument</h4><ul>${instr}</ul></div>
+    <div><h4>Mätmetoder</h4><ul>${metod}</ul></div>
+    <div><h4>Underskrift</h4><div class="l1-sign">${esc(bm.namn || "")}</div>
+      <div class="sub">${esc(bm.epost || "")}${bm.telefon ? " · " + esc(bm.telefon) : ""}</div>
+      <div class="sub">${esc(foretag || "")}</div></div>
+  </div>
+  <div class="hint" style="margin-top:8px">Kvot = uppmätt / projekterat. Färg: ≤ ±${tol.gron} % grön, ≤ ±${tol.gul} % gul, däröver röd. K-faktor används för don med k-faktor (l/s vid 1 Pa).</div>`;
 }
 
 /* --- Aggregat (E1) --- */
@@ -578,28 +647,40 @@ function bindColl(root, s, coll, addSel) {
 }
 function bindLuftflode(root, s) {
   bindColl(root, s, "matpunkter", "data-add-matpunkt");
+  bindSection(root, () => st.data, { s: () => s, u: () => st.data });
   const tbody = root.querySelector("tbody");
-  if (tbody) tbody.addEventListener("input", () => refreshFlode(root, tbody));
-  if (tbody) tbody.addEventListener("change", () => refreshFlode(root, tbody));
+  if (tbody) {
+    const upd = () => refreshFlode(root, tbody);
+    tbody.addEventListener("input", upd);
+    tbody.addEventListener("change", upd);
+  }
+  refreshFlode(root, tbody);
 }
 function refreshFlode(root, tbody) {
+  if (!tbody) return;
   const tol = (window.__ovkSettings || {}).tolerans || { gron: 10, gul: 20 };
   let sTL = 0, uTL = 0, sFL = 0, uFL = 0;
   $$("tr", tbody).forEach((tr) => {
     const get = (f) => { const el = tr.querySelector(`[data-field="${f}"]`); return el ? num(el.value) : null; };
     const tlP = get("tl.proj"), tlU = get("tl.uppm"), flP = get("fl.proj"), flU = get("fl.uppm");
     if (tlP) sTL += tlP; if (tlU) uTL += tlU; if (flP) sFL += flP; if (flU) uFL += flU;
-    const setPct = (tag, p, uu) => {
-      const box = tr.querySelector(`[data-pct="${tag}"]`);
-      if (!box) return;
-      box.textContent = p && uu !== null ? (((uu - p) / p) * 100).toFixed(0) + " %" : "";
+    const setKvot = (tag, p, uu) => {
+      const box = tr.querySelector(`[data-kvot="${tag}"]`);
+      if (box) box.textContent = p && uu !== null ? (uu / p).toFixed(2) : "";
     };
-    setPct("tl", tlP, tlU); setPct("fl", flP, flU);
+    setKvot("tl", tlP, tlU); setKvot("fl", flP, flU);
     const kTL = tlP && tlU !== null ? avvikelseKlass(((tlU - tlP) / tlP) * 100, tol.gron, tol.gul) : "";
     const kFL = flP && flU !== null ? avvikelseKlass(((flU - flP) / flP) * 100, tol.gron, tol.gul) : "";
     tr.classList.toggle("out-high", kTL === "high" || kFL === "high");
     tr.classList.toggle("out-mid", (kTL === "mid" || kFL === "mid") && !(kTL === "high" || kFL === "high"));
   });
+  const setTot = (name, val) => { const el = root.querySelector(`[data-tot="${name}"]`); if (el) el.textContent = val; };
+  setTot("tlProj", fmt(sTL, 0));
+  setTot("tlUppm", fmt(uTL, 0));
+  setTot("tlKvot", sTL ? (uTL / sTL).toFixed(2) : "");
+  setTot("flProj", fmt(sFL, 0));
+  setTot("flUppm", fmt(uFL, 0));
+  setTot("flKvot", sFL ? (uFL / sFL).toFixed(2) : "");
   const sumBox = root.querySelector("[data-flode-sum]");
   if (sumBox) sumBox.textContent = `Summa TL: proj ${fmt(sTL, 0)} / uppm ${fmt(uTL, 0)} l/s · FL: proj ${fmt(sFL, 0)} / uppm ${fmt(uFL, 0)} l/s`;
 }

@@ -95,19 +95,28 @@ export function nyttSystem(nr) {
     klimat: [],
     anmarkningar: [],
     atgarder: [],
+    // Huvudrubriker för luftflödesprotokollet (L1) – speglar mallens fält.
+    l1: { anlaggning: "", aggregatforteckning: "", ordernr: "", ritningsnummer: "", plan: "", anteckning: "" },
   };
 }
 
 export function nyFläkt() {
   return { id: crypto.randomUUID(), systemdel: "", fläkttyp: "F", instAr: "", placering: "", projFlode: "", uppmFlode: "", betjanar: "" };
 }
+// Mätpunkt = en rad i L1/luftflödesprotokollet. Kvot (uppmätt/projekterad)
+// räknas fram och sparas inte. Kägel-djup finns bara på frånluftssidan.
 export function nyMatpunkt() {
   return {
     id: crypto.randomUUID(), rumNr: "", beskrivning: "",
-    tl: { dontyp: "", proj: "", uppm: "", kFaktor: "", matMetod: "ID2" },
-    fl: { dontyp: "", proj: "", uppm: "", kFaktor: "", matMetod: "ET1" },
-    pa: "", anteckning: "",
+    tl: { dontyp: "", proj: "", uppm: "", pa: "", kFaktor: "", matMetod: "ID2" },
+    fl: { dontyp: "", proj: "", uppm: "", pa: "", kFaktor: "", kageldjup: "", matMetod: "ET1" },
+    anteckning: "",
   };
+}
+// Kvot för en sida: uppmätt / projekterat (som i mallens L1).
+export function matpunktKvot(sida) {
+  const p = num(sida && sida.proj), uu = num(sida && sida.uppm);
+  return p && uu !== null ? uu / p : null;
 }
 export function nyAggregat() {
   return {
