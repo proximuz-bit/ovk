@@ -6,6 +6,9 @@ import * as dashboard from "./views/dashboard.js";
 import * as uppdragView from "./views/uppdrag.js";
 import * as fastigheter from "./views/fastigheter.js";
 import * as installningar from "./views/installningar.js";
+import * as kunder from "./kunder.js";
+import { wireDragDrop } from "./drop.js";
+const { kundOchObjekt } = kunder;
 
 export const state = {
   settings: null,
@@ -90,33 +93,52 @@ function wireChrome() {
   });
   $("#btn-import-excel").addEventListener("click", () => $("#file-import-excel").click());
   $("#file-import-excel").addEventListener("change", async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    if (!window.XLSX) { toast("Excel-biblioteket är inte laddat."); e.target.value = ""; return; }
-    let antal = 0; const misslyckade = [];
-    for (const file of files) {
-      try {
-        const buf = await file.arrayBuffer();
-        const lista = excel.tolkaFil(window.XLSX, buf, { filnamn: file.name });
-        for (const u of lista) {
-          await db.put("uppdrag", u);
-          await fastigheter.syncFastighet(u);
-          antal++;
-        }
-      } catch (err) {
-        misslyckade.push(`${file.name}: ${err.message || err}`);
-      }
-    }
+    await importeraExcelFiler(Array.from(e.target.files || []), false);
     e.target.value = "";
-    if (misslyckade.length) console.warn("Excel-import misslyckades:", misslyckade);
-    toast(antal ? `Importerade ${antal} uppdrag${misslyckade.length ? ` (${misslyckade.length} misslyckades)` : ""}` : `Inget importerades. ${misslyckade[0] || ""}`);
-    navigate();
   });
+  $("#btn-import-dir").addEventListener("click", () => $("#file-import-dir").click());
+  $("#file-import-dir").addEventListener("change", async (e) => {
+    await importeraExcelFiler(Array.from(e.target.files || []), true);
+    e.target.value = "";
+  });
+  wireDragDrop(async (poster) => {
+    if (!poster.length) { toast("Inga OVK-protokoll hittades i det du släppte."); return; }
+    await importeraExcelFiler(poster, true);
+  });
+}
+
+async function importeraExcelFiler(files, medMapp) {
+  if (!files.length) return;
+  if (!window.XLSX) { toast("Excel-biblioteket är inte laddat."); return; }
+  let antal = 0; const misslyckade = [];
+  for (const file of files) {
+    try {
+      const { kund, objekt } = kundOchObjekt(file._rel || file.webkitRelativePath, medMapp);
+      const buf = await file.arrayBuffer();
+      const lista = excel.tolkaFil(window.XLSX, buf, { filnamn: file.name });
+      for (const u of lista) {
+        if (objekt && u.byggnad) {
+          u.byggnad.interntNamn = objekt;
+          if (!u.byggnad.fastighetsbeteckning) u.byggnad.fastighetsbeteckning = objekt;
+        }
+        await db.put("uppdrag", u);
+        await fastigheter.syncFastighet(u);
+        await kunder.syncKund(u, kund);
+        antal++;
+      }
+    } catch (err) {
+      misslyckade.push(`${file.name}: ${err.message || err}`);
+    }
+  }
+  if (misslyckade.length) console.warn("Excel-import misslyckades:", misslyckade);
+  toast(antal ? `Importerade ${antal} uppdrag${misslyckade.length ? ` (${misslyckade.length} misslyckades)` : ""}` : `Inget importerades. ${misslyckade[0] || ""}`);
+  navigate();
 }
 
 async function boot() {
   wireChrome();
   await state.loadSettings();
+  try { await kunder.migreraKunder(); } catch (err) { console.error("Kundmigrering misslyckades:", err); }
   window.addEventListener("hashchange", navigate);
   navigate();
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

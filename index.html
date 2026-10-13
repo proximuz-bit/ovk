@@ -29,14 +29,19 @@
         <button id="btn-export" class="ghost" title="Ladda ner all data som JSON">Exportera data</button>
         <button id="btn-import" class="ghost" title="Återläs från JSON-backup">Importera data</button>
         <button id="btn-import-excel" class="ghost" title="Importera ifyllda OVK-protokoll (Excel)">Importera OVK (Excel)</button>
+        <button id="btn-import-dir" class="ghost" title="Importera en kundmapp – mappnamnet blir kund">Importera mapp (kund)</button>
         <input type="file" id="file-import" accept="application/json" hidden />
         <input type="file" id="file-import-excel" accept=".xlsm,.xlsx,.xls" multiple hidden />
+        <input type="file" id="file-import-dir" accept=".xlsm,.xlsx,.xls" webkitdirectory directory multiple hidden />
         <small id="storage-note"></small>
       </div>
     </aside>
     <main id="main" class="main"></main>
   </div>
   <div id="toast" class="toast" hidden></div>
+  <div id="drop-overlay" hidden>
+    <div class="drop-box"><strong>Släpp här</strong><span>OVK-protokoll – eller en hel kundmapp</span></div>
+  </div>
 
   <script src="vendor/pdf-lib.min.js"></script>
   <script src="vendor/xlsx.full.min.js"></script>

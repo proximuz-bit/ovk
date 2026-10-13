@@ -26,11 +26,16 @@ export const DEFAULT_SETTINGS = {
   tolerans: { gron: 10, gul: 20 },
 };
 
+export function nyKund(namn) {
+  return { id: crypto.randomUUID(), namn: (namn || "").trim(), ort: "", orgnr: "" };
+}
+
 export function nyttUppdrag(settings) {
   const bm = settings?.besiktningsman || DEFAULT_SETTINGS.besiktningsman;
   return {
     id: crypto.randomUUID(),
     fastighetId: "",
+    kundId: "",
     referensNr: "",
     uppdragstyp: "Återkommande besiktning",
     besiktningsdatum: todayISO(),

@@ -1,7 +1,7 @@
 // Enkelt IndexedDB-lager. Ett uppdrag lagras som ett dokument med nästlade delar.
 const DB_NAME = "ovk-webb";
-const DB_VERSION = 1;
-export const STORES = ["fastigheter", "uppdrag", "meta"];
+const DB_VERSION = 2;
+export const STORES = ["kunder", "fastigheter", "uppdrag", "meta"];
 
 let _db = null;
 export function open() {

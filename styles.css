@@ -86,6 +86,9 @@ tr.out-mid{background:#fffbeb}
 .item:hover{border-color:var(--brand-2)}
 .item .meta{color:var(--muted);font-size:12.5px;margin-top:2px}
 .item-actions{display:flex;gap:8px;align-items:center}
+.kund-sel{width:auto;min-width:140px;max-width:190px;padding:5px 7px;border-radius:6px;font-size:12.5px}
+.kund-tabs button .pill{background:#e7edf2}
+.kund-tabs button.active .pill{background:var(--brand);color:#fff}
 
 /* Tabs inside uppdrag */
 .tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
@@ -110,3 +113,9 @@ tr.out-mid{background:#fffbeb}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px}
 .stat .n{font-size:26px;font-weight:700}
 .stat .l{color:var(--muted);font-size:12.5px}
+
+#drop-overlay{position:fixed;inset:0;z-index:60;background:rgba(20,40,60,.55);display:flex;align-items:center;justify-content:center}
+#drop-overlay[hidden]{display:none}
+#drop-overlay .drop-box{background:#fff;border:2px dashed var(--brand);border-radius:16px;padding:30px 40px;text-align:center;display:flex;flex-direction:column;gap:6px;box-shadow:0 12px 44px rgba(0,0,0,.35)}
+#drop-overlay .drop-box strong{font-size:19px;color:var(--brand)}
+#drop-overlay .drop-box span{color:var(--muted);font-size:13.5px}

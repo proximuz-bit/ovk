@@ -10,8 +10,9 @@ import {
 import { intervallAr, nastaDatum, todayISO, num, fmt, avvikelseKlass } from "../domain.js";
 import { esc, $, $$, toast, debounce, options, field, textarea, option } from "../ui.js";
 import { syncFastighet } from "./fastigheter.js";
+import { syncKund, skapaKund, forvaldKund, settForvaldKund } from "../kunder.js";
 
-const st = { data: null, tab: "byggnad", sysId: null, sub: "grund" };
+const st = { data: null, tab: "byggnad", sysId: null, sub: "grund", kunder: [] };
 let save = () => {};
 
 function scheduleSave() { save(); }
@@ -22,12 +23,16 @@ async function load(id) {
   if (!st.data.system) st.data.system = [];
   if (!st.data.intyg) st.data.intyg = [];
   if (!st.sysId && st.data.system[0]) st.sysId = st.data.system[0].id;
-  save = debounce(async () => { await db.put("uppdrag", st.data); await syncFastighet(st.data); }, 350);
+  st.kunder = (await db.getAll("kunder")).sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
+  save = debounce(async () => { await db.put("uppdrag", st.data); await syncFastighet(st.data); await syncKund(st.data); }, 350);
 }
 
 export async function renderNytt(main) {
   const s = await db.getMeta("settings");
   const u = nyttUppdrag(s);
+  const kund = forvaldKund();
+  if (kund) u.kundId = kund;
+  settForvaldKund("");
   await db.put("uppdrag", u);
   location.hash = `#/uppdrag/${u.id}`;
 }
@@ -101,6 +106,16 @@ function renderByggnad(c) {
   c.innerHTML = `
   <div class="card">
     <h3>Fastighet &amp; byggnad</h3>
+    <div class="row">
+      <div class="field"><label>Kund</label>
+        <select id="kund-val">
+          ${option("", "— Utan kund —", !u.kundId)}
+          ${st.kunder.map((k) => option(k.id, k.namn, u.kundId === k.id)).join("")}
+          ${option("__ny__", "＋ Ny kund…", false)}
+        </select>
+        <div class="hint">Styr vilken kundflik uppdraget hamnar under på översikten.</div>
+      </div>
+    </div>
     <div class="row">
       ${field("Fastighetsbeteckning", "b.fastighetsbeteckning", b.fastighetsbeteckning)}
       ${field("Adress", "b.adress", b.adress)}
@@ -176,6 +191,20 @@ function renderByggnad(c) {
     ${field("Bilagor", "u.bilagor", u.bilagor, { placeholder: "Ritningar, flödesprotokoll, intrångsprotokoll…" })}
   </div>`;
   bindSection(c, () => st.data, { b: () => st.data.byggnad, bm: () => st.data.besiktningsman, u: () => st.data });
+  $("#kund-val", c)?.addEventListener("change", async (e) => {
+    let v = e.target.value;
+    if (v === "__ny__") {
+      const namn = window.prompt("Namn på ny kund:");
+      if (!namn || !namn.trim()) { e.target.value = u.kundId || ""; return; }
+      const k = await skapaKund(namn.trim());
+      v = k ? k.id : "";
+      st.kunder = (await db.getAll("kunder")).sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
+    }
+    u.kundId = v || "";
+    await db.put("uppdrag", u);
+    toast("Kund uppdaterad");
+    renderByggnad(c);
+  });
 }
 
 /* ============ B. System ============ */
