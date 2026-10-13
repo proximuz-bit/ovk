@@ -53,45 +53,93 @@ function intervallFranBeskat(v) {
   return "";
 }
 
+/* ---------- rubrikstyrd celluppslagning ---------- */
+// De två protokollmallarna ("ny" .xlsm och "gammal" .xls/MSV) har identiska
+// rubriktexter men värdena ligger på olika rader (ny: rubrikrad+1 på rad 10/48,
+// gammal: rad 12/53). Därför letar vi upp rubriken och läser kolumnerna relativt
+// rubrikens rad i stället för att hårdkoda celladresser.
+function normalisera(s) {
+  return String(s).replace(/\s+/g, " ").trim().replace(/[:*]+$/, "").trim().toLowerCase();
+}
+// normaliserad rubriktext -> [adresser] (samma rubrik kan förekomma flera gånger)
+function rubrikKarta(ws) {
+  const karta = new Map();
+  if (!ws) return karta;
+  for (const addr of Object.keys(ws)) {
+    if (addr[0] === "!") continue;
+    const c = ws[addr];
+    const v = c && c.v;
+    if (v === undefined || v === null) continue;
+    const s = normalisera(v);
+    if (!s) continue;
+    let arr = karta.get(s);
+    if (!arr) karta.set(s, (arr = []));
+    arr.push(addr);
+  }
+  return karta;
+}
+function dela(addr) {
+  const m = /^([A-Z]+)(\d+)$/.exec(addr);
+  return m ? { col: m[1], rad: parseInt(m[2], 10) } : null;
+}
+// Raden direkt under första träffen på en (unik) rubrik = där värdena finns.
+function rubrikVarderRad(karta, rubrik) {
+  const adresser = karta.get(normalisera(rubrik));
+  if (!adresser || !adresser.length) return null;
+  const p = dela(adresser[0]);
+  return p ? p.rad + 1 : null;
+}
+function rubrikVarde(ws, karta, rubrik, kolumn) {
+  const rad = rubrikVarderRad(karta, rubrik);
+  return rad === null ? null : cellAt(ws, kolumn + rad);
+}
+
 /* ---------- byggnad / besiktningsman ---------- */
-const BYGGNAD_FALT = [
-  ["D11", "fastighetsbeteckning"], ["H11", "adress"], ["J11", "postnr"], ["K11", "ort"],
-  ["D13", "byggnadsagare"], ["H13", "byggnadsagareAdress"], ["J13", "byggnadsagarePostnr"], ["K13", "byggnadsagareOrt"],
-  ["D15", "fakturaAdress"], ["J15", "fakturaPostnr"], ["K15", "fakturaOrt"],
-  ["D17", "forvaltare"], ["I17", "forvaltareTelefon"], ["J17", "forvaltareEpost"],
-  ["D19", "interntNamn"], ["F19", "interntNr"], ["H19", "verksamhet"],
-  ["J19", "braM2"], ["K19", "antLgh"], ["M19", "antLokaler"],
+// [ankarrubrik, { kolumn: fält }] – läses en rad under ankarrubriken.
+const BYGGNAD_BLOCK = [
+  ["Fastighetsbeteckning", { D: "fastighetsbeteckning", H: "adress", J: "postnr", K: "ort" }],
+  ["Byggnadsägaren", { D: "byggnadsagare", H: "byggnadsagareAdress", J: "byggnadsagarePostnr", K: "byggnadsagareOrt" }],
+  ["Faktureringsadress", { D: "fakturaAdress", J: "fakturaPostnr", K: "fakturaOrt" }],
+  ["Fastighetsansvarig/Förvaltare", { D: "forvaltare", I: "forvaltareTelefon", J: "forvaltareEpost" }],
+  ["Internt byggnadsnamn", { D: "interntNamn", F: "interntNr", H: "verksamhet", J: "braM2", K: "antLgh", M: "antLokaler" }],
 ];
-const BM_FALT = [
-  ["D49", "namn"], ["H49", "telefon"], ["J49", "epost"],
-  ["D53", "certOrgan"], ["F53", "certNr"], ["J53", "behorighet"],
+const BM_BLOCK = [
+  ["Besiktningsman", { D: "namn", H: "telefon", J: "epost" }],
+  ["Certiferingsorgan", { D: "certOrgan", F: "certNr", J: "behorighet" }],
 ];
-const BM_DATUM = [["H53", "certGiltigTom"]];
 
 export function mapA_Blankett(ws) {
+  const karta = rubrikKarta(ws);
   const out = { referensNr: txt(cellAt(ws, "I5")), byggnad: {}, besiktningsman: {} };
-  for (const [addr, f] of BYGGNAD_FALT) {
-    const v = txt(cellAt(ws, addr));
-    if (v) out.byggnad[f] = v;
+  for (const [rubrik, falt] of BYGGNAD_BLOCK) {
+    for (const [kol, f] of Object.entries(falt)) {
+      const v = txt(rubrikVarde(ws, karta, rubrik, kol));
+      if (v) out.byggnad[f] = v;
+    }
   }
-  for (const [addr, f] of BM_FALT) {
-    const v = txt(cellAt(ws, addr));
-    if (v) out.besiktningsman[f] = v;
+  for (const [rubrik, falt] of BM_BLOCK) {
+    for (const [kol, f] of Object.entries(falt)) {
+      const v = txt(rubrikVarde(ws, karta, rubrik, kol));
+      if (v) out.besiktningsman[f] = v;
+    }
   }
-  for (const [addr, f] of BM_DATUM) {
-    const v = toISO(cellAt(ws, addr));
-    if (v) out.besiktningsman[f] = v;
-  }
+  const giltig = toISO(rubrikVarde(ws, karta, "Certiferingsorgan", "H"));
+  if (giltig) out.besiktningsman.certGiltigTom = giltig;
   return out;
 }
 
 /* ---------- system ---------- */
-// Namn på systemflikar som refereras i A_Blankett kolumn J (rad 23-40).
+// Namn på systemflikar som refereras i A_Blankett kolumn J (Bilaga/B-sida),
+// från raden under "Systemnr"-rubriken och så långt systemnumret (kolumn D) varar.
 export function systemflikarFranA(ws) {
+  const karta = rubrikKarta(ws);
+  const start = rubrikVarderRad(karta, "Systemnr");
   const namn = [];
-  for (let r = 23; r <= 40; r++) {
+  const fran = start === null ? 23 : start;
+  for (let r = fran; r <= fran + 20; r++) {
+    if (start !== null && !txt(cellAt(ws, "D" + r))) break;
     const v = txt(cellAt(ws, "J" + r));
-    if (v) namn.push(v);
+    if (v && !/^-+$/.test(v)) namn.push(v);
   }
   return namn;
 }
@@ -118,6 +166,9 @@ function systemFranB(wb, arkNamn) {
 function systemFranSammanstallning(ws, rad) {
   const nr = txt(cellAt(ws, "D" + rad));
   if (!nr) return null;
+  // Rubrikrader ("Ingår samtliga…", "A3 …") saknar alla systemfält – hoppa dem.
+  const harFalt = ["E", "F", "G", "J"].some((k) => txt(cellAt(ws, k + rad)));
+  if (!harFalt) return null;
   const s = nyttSystem(nr);
   s.resultat = normResultat(cellAt(ws, "G" + rad));
   s.besiktningsdatum = toISO(cellAt(ws, "F" + rad));
@@ -152,9 +203,13 @@ export function tolkaArbetsbok(wb, opts = {}) {
     if (s) system.push(s);
   }
   if (!system.length) {
-    for (let r = 23; r <= 38; r++) {
+    const karta = rubrikKarta(ws);
+    let start = rubrikVarderRad(karta, "Systemnr");
+    if (start === null) start = 23;
+    for (let r = start; r <= start + 20; r++) {
       const s = systemFranSammanstallning(ws, r);
       if (s) system.push(s);
+      else if (!txt(cellAt(ws, "D" + r))) break;
     }
   }
   uppdrag.system = system;
